@@ -1,0 +1,9 @@
+.DS_Store
+build-cache/
+dist/
+*.app/
+AppIcon.iconset/
+AppIcon-*.icns
+AppIcon-source-*.png
+MouseQuick.req
+local-codesign.cnf
