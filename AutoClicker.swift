@@ -124,7 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func buildWindow() {
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 260, height: 150),
+            contentRect: NSRect(x: 0, y: 0, width: 220, height: 150),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -141,7 +141,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.contentView = content
 
         let title = label("鼠标快点", size: 19, weight: .semibold)
-        let intervalUnit = label("毫秒", size: 12, color: .secondaryLabelColor)
+        let intervalUnit = NSTextField()
+        intervalUnit.cell = VerticallyCenteredTextFieldCell(textCell: "毫秒")
+        intervalUnit.alignment = .center
+        intervalUnit.font = .systemFont(ofSize: 11, weight: .medium)
+        intervalUnit.textColor = .secondaryLabelColor
+        intervalUnit.isEditable = false
+        intervalUnit.isSelectable = false
+        intervalUnit.isBezeled = false
+        intervalUnit.drawsBackground = false
 
         intervalField = NSTextField()
         intervalField.cell = VerticallyCenteredTextFieldCell(textCell: "1000")
@@ -152,14 +160,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         intervalField.target = self
         intervalField.action = #selector(validateInterval)
         intervalField.isBezeled = false
-        intervalField.drawsBackground = true
-        intervalField.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.32)
+        intervalField.drawsBackground = false
         intervalField.focusRingType = .none
-        intervalField.wantsLayer = true
-        intervalField.layer?.cornerRadius = 9
-        intervalField.layer?.borderWidth = 2
-        intervalField.layer?.borderColor = NSColor.systemBlue.withAlphaComponent(0.72).cgColor
-        intervalField.layer?.masksToBounds = true
 
         startButton = NSButton(title: "3 秒后开始", target: self, action: #selector(toggleClicking))
         startButton.bezelStyle = .rounded
@@ -173,10 +175,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let intervalRow = NSView()
         intervalRow.translatesAutoresizingMaskIntoConstraints = false
+        intervalRow.wantsLayer = true
+        intervalRow.layer?.cornerRadius = 9
+        intervalRow.layer?.borderWidth = 2
+        intervalRow.layer?.borderColor = NSColor.systemBlue.withAlphaComponent(0.72).cgColor
+        intervalRow.layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.32).cgColor
+        intervalRow.layer?.masksToBounds = true
         intervalField.translatesAutoresizingMaskIntoConstraints = false
         intervalUnit.translatesAutoresizingMaskIntoConstraints = false
-        intervalRow.addSubview(intervalField)
-        intervalRow.addSubview(intervalUnit)
+        let intervalInputGroup = NSStackView(views: [intervalField, intervalUnit])
+        intervalInputGroup.orientation = .horizontal
+        intervalInputGroup.alignment = .centerY
+        intervalInputGroup.spacing = 4
+        intervalInputGroup.translatesAutoresizingMaskIntoConstraints = false
+        intervalRow.addSubview(intervalInputGroup)
 
         let bottomRow = NSStackView(views: [statusPillView, countLabel])
         bottomRow.orientation = .horizontal
@@ -193,19 +205,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         stack.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(stack)
 
-        intervalRow.widthAnchor.constraint(equalToConstant: 260).isActive = true
+        intervalRow.widthAnchor.constraint(equalToConstant: 150).isActive = true
         intervalRow.heightAnchor.constraint(equalToConstant: 28).isActive = true
-        intervalField.widthAnchor.constraint(equalToConstant: 160).isActive = true
+        intervalField.widthAnchor.constraint(equalToConstant: 75).isActive = true
         intervalField.heightAnchor.constraint(equalToConstant: 28).isActive = true
-        startButton.widthAnchor.constraint(equalToConstant: 160).isActive = true
+        intervalUnit.widthAnchor.constraint(equalToConstant: 30).isActive = true
+        intervalUnit.heightAnchor.constraint(equalToConstant: 28).isActive = true
+        startButton.widthAnchor.constraint(equalToConstant: 150).isActive = true
         startButton.heightAnchor.constraint(equalToConstant: 30).isActive = true
         statusPillView.heightAnchor.constraint(equalToConstant: 20).isActive = true
-        bottomRow.widthAnchor.constraint(equalToConstant: 160).isActive = true
+        bottomRow.widthAnchor.constraint(equalToConstant: 150).isActive = true
         NSLayoutConstraint.activate([
-            intervalField.centerXAnchor.constraint(equalTo: intervalRow.centerXAnchor),
-            intervalField.centerYAnchor.constraint(equalTo: intervalRow.centerYAnchor),
-            intervalUnit.leadingAnchor.constraint(equalTo: intervalField.trailingAnchor, constant: 8),
-            intervalUnit.centerYAnchor.constraint(equalTo: intervalField.centerYAnchor),
+            intervalInputGroup.centerXAnchor.constraint(equalTo: intervalRow.centerXAnchor),
+            intervalInputGroup.centerYAnchor.constraint(equalTo: intervalRow.centerYAnchor),
             stack.centerXAnchor.constraint(equalTo: content.centerXAnchor),
             stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 11)
         ])
