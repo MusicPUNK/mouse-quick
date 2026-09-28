@@ -6,6 +6,8 @@ DIST_DIR="$PROJECT_DIR/dist"
 APP_DIR="$DIST_DIR/鼠标快点.app"
 MODULE_CACHE="$DIST_DIR/module-cache"
 EXECUTABLE="$APP_DIR/Contents/MacOS/MacAutoClicker"
+ARM_EXECUTABLE="$DIST_DIR/MacAutoClicker-arm64"
+INTEL_EXECUTABLE="$DIST_DIR/MacAutoClicker-x86_64"
 VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PROJECT_DIR/Info.plist")
 
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources" "$MODULE_CACHE"
@@ -14,10 +16,23 @@ CLANG_MODULE_CACHE_PATH="$MODULE_CACHE" \
 SWIFT_MODULECACHE_PATH="$MODULE_CACHE" \
 xcrun swiftc \
     -sdk /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk \
+    -target arm64-apple-macos13.0 \
     -framework AppKit \
     -framework ApplicationServices \
     "$PROJECT_DIR/AutoClicker.swift" \
-    -o "$EXECUTABLE"
+    -o "$ARM_EXECUTABLE"
+
+CLANG_MODULE_CACHE_PATH="$MODULE_CACHE" \
+SWIFT_MODULECACHE_PATH="$MODULE_CACHE" \
+xcrun swiftc \
+    -sdk /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk \
+    -target x86_64-apple-macos13.0 \
+    -framework AppKit \
+    -framework ApplicationServices \
+    "$PROJECT_DIR/AutoClicker.swift" \
+    -o "$INTEL_EXECUTABLE"
+
+lipo -create "$ARM_EXECUTABLE" "$INTEL_EXECUTABLE" -output "$EXECUTABLE"
 
 cp "$PROJECT_DIR/Info.plist" "$APP_DIR/Contents/Info.plist"
 cp "$PROJECT_DIR/AppIcon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
@@ -34,4 +49,3 @@ ditto -c -k --sequesterRsrc --keepParent \
     "$DIST_DIR/鼠标快点-v$VERSION-macOS.zip"
 
 echo "Built: $DIST_DIR/鼠标快点-v$VERSION-macOS.zip"
-

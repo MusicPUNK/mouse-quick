@@ -2,6 +2,8 @@
 
 一款轻量的 macOS 原生系统级自动点击器。它按照设定间隔，在当前真实鼠标位置发送左键点击，可用于网页、Chrome 扩展弹窗、浏览器工具栏和其他 Mac 应用。
 
+发布包为 Universal 2 应用，同时支持 Apple 芯片和 Intel Mac。
+
 ## 下载与安装
 
 1. 打开 GitHub 仓库右侧的 **Releases**，下载最新的 `鼠标快点-v*-macOS.zip`。
