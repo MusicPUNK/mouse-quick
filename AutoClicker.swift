@@ -48,6 +48,84 @@ final class VerticallyCenteredTextFieldCell: NSTextFieldCell {
     }
 }
 
+final class EditableIntervalField: NSTextField {
+    private var hoverTrackingArea: NSTrackingArea?
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        addCursorRect(bounds, cursor: .iBeam)
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverTrackingArea {
+            removeTrackingArea(hoverTrackingArea)
+        }
+        let area = NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .mouseMoved, .cursorUpdate, .activeAlways, .inVisibleRect],
+            owner: self
+        )
+        addTrackingArea(area)
+        hoverTrackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        NSCursor.iBeam.set()
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        NSCursor.iBeam.set()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        NSCursor.arrow.set()
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        NSCursor.iBeam.set()
+    }
+}
+
+final class IntervalInputView: NSView {
+    private var hoverTrackingArea: NSTrackingArea?
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        addCursorRect(bounds, cursor: .iBeam)
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverTrackingArea {
+            removeTrackingArea(hoverTrackingArea)
+        }
+        let area = NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .mouseMoved, .cursorUpdate, .activeAlways, .inVisibleRect],
+            owner: self
+        )
+        addTrackingArea(area)
+        hoverTrackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        NSCursor.iBeam.set()
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        NSCursor.iBeam.set()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        NSCursor.arrow.set()
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        NSCursor.iBeam.set()
+    }
+}
+
 final class StatusPillView: NSView {
     var text = "" {
         didSet { needsDisplay = true }
@@ -87,6 +165,7 @@ final class StatusPillView: NSView {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow!
     private var intervalField: NSTextField!
+    private var intervalInputView: IntervalInputView!
     private var startButton: NSButton!
     private var statusPillView: StatusPillView!
     private var countLabel: NSTextField!
@@ -94,6 +173,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var countdownTimer: Timer?
     private var globalKeyMonitor: Any?
     private var localKeyMonitor: Any?
+    private var localMouseMonitor: Any?
+    private var replaceIntervalOnNextInput = false
     private var running = false
     private var pausedForPointerInsideWindow = false
     private var clickCount = 0
@@ -103,6 +184,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configureDockIcon()
         buildWindow()
         installHotkeys()
+        installPanelClickMonitor()
         updateAccessibilityStatus()
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
@@ -112,6 +194,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         stopClicking(message: "已停止")
         if let monitor = globalKeyMonitor { NSEvent.removeMonitor(monitor) }
         if let monitor = localKeyMonitor { NSEvent.removeMonitor(monitor) }
+        if let monitor = localMouseMonitor { NSEvent.removeMonitor(monitor) }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -136,13 +219,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.hidesOnDeactivate = false
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isMovableByWindowBackground = true
+        window.acceptsMouseMovedEvents = true
 
         let content = NSView()
         window.contentView = content
 
         let title = label("鼠标快点", size: 19, weight: .semibold)
         let intervalUnit = NSTextField()
-        intervalUnit.cell = VerticallyCenteredTextFieldCell(textCell: "毫秒")
+        intervalUnit.cell = VerticallyCenteredTextFieldCell(textCell: "秒")
         intervalUnit.alignment = .center
         intervalUnit.font = .systemFont(ofSize: 11, weight: .medium)
         intervalUnit.textColor = .secondaryLabelColor
@@ -151,14 +235,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         intervalUnit.isBezeled = false
         intervalUnit.drawsBackground = false
 
-        intervalField = NSTextField()
-        intervalField.cell = VerticallyCenteredTextFieldCell(textCell: "1000")
-        intervalField.stringValue = "1000"
+        intervalField = EditableIntervalField()
+        intervalField.cell = VerticallyCenteredTextFieldCell(textCell: "1")
+        intervalField.stringValue = "1"
         intervalField.alignment = .center
         intervalField.font = .monospacedDigitSystemFont(ofSize: 16, weight: .medium)
-        intervalField.placeholderString = "最短 50"
+        intervalField.placeholderString = "0.05"
         intervalField.target = self
         intervalField.action = #selector(validateInterval)
+        intervalField.isEditable = true
+        intervalField.isSelectable = true
+        intervalField.isEnabled = true
+        intervalField.refusesFirstResponder = false
         intervalField.isBezeled = false
         intervalField.drawsBackground = false
         intervalField.focusRingType = .none
@@ -173,22 +261,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         countLabel = label("已点击 0 次", size: 11, color: .secondaryLabelColor)
         countLabel.alignment = .right
 
-        let intervalRow = NSView()
-        intervalRow.translatesAutoresizingMaskIntoConstraints = false
-        intervalRow.wantsLayer = true
-        intervalRow.layer?.cornerRadius = 9
-        intervalRow.layer?.borderWidth = 2
-        intervalRow.layer?.borderColor = NSColor.systemBlue.withAlphaComponent(0.72).cgColor
-        intervalRow.layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.32).cgColor
-        intervalRow.layer?.masksToBounds = true
+        intervalInputView = IntervalInputView()
+        intervalInputView.translatesAutoresizingMaskIntoConstraints = false
+        intervalInputView.wantsLayer = true
+        intervalInputView.layer?.cornerRadius = 9
+        intervalInputView.layer?.borderWidth = 2
+        intervalInputView.layer?.borderColor = NSColor.systemBlue.withAlphaComponent(0.72).cgColor
+        intervalInputView.layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.32).cgColor
+        intervalInputView.layer?.masksToBounds = true
         intervalField.translatesAutoresizingMaskIntoConstraints = false
+        intervalInputView.addSubview(intervalField)
         intervalUnit.translatesAutoresizingMaskIntoConstraints = false
-        let intervalInputGroup = NSStackView(views: [intervalField, intervalUnit])
-        intervalInputGroup.orientation = .horizontal
-        intervalInputGroup.alignment = .centerY
-        intervalInputGroup.spacing = 4
-        intervalInputGroup.translatesAutoresizingMaskIntoConstraints = false
-        intervalRow.addSubview(intervalInputGroup)
+        let intervalRow = NSStackView(views: [intervalInputView, intervalUnit])
+        intervalRow.orientation = .horizontal
+        intervalRow.alignment = .centerY
+        intervalRow.spacing = 6
 
         let bottomRow = NSStackView(views: [statusPillView, countLabel])
         bottomRow.orientation = .horizontal
@@ -205,22 +292,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         stack.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(stack)
 
-        intervalRow.widthAnchor.constraint(equalToConstant: 150).isActive = true
-        intervalRow.heightAnchor.constraint(equalToConstant: 28).isActive = true
-        intervalField.widthAnchor.constraint(equalToConstant: 75).isActive = true
+        intervalInputView.widthAnchor.constraint(equalToConstant: 80).isActive = true
+        intervalInputView.heightAnchor.constraint(equalToConstant: 28).isActive = true
+        intervalField.widthAnchor.constraint(equalToConstant: 70).isActive = true
         intervalField.heightAnchor.constraint(equalToConstant: 28).isActive = true
-        intervalUnit.widthAnchor.constraint(equalToConstant: 30).isActive = true
+        intervalUnit.widthAnchor.constraint(equalToConstant: 20).isActive = true
         intervalUnit.heightAnchor.constraint(equalToConstant: 28).isActive = true
         startButton.widthAnchor.constraint(equalToConstant: 150).isActive = true
         startButton.heightAnchor.constraint(equalToConstant: 30).isActive = true
         statusPillView.heightAnchor.constraint(equalToConstant: 20).isActive = true
         bottomRow.widthAnchor.constraint(equalToConstant: 150).isActive = true
         NSLayoutConstraint.activate([
-            intervalInputGroup.centerXAnchor.constraint(equalTo: intervalRow.centerXAnchor),
-            intervalInputGroup.centerYAnchor.constraint(equalTo: intervalRow.centerYAnchor),
+            intervalField.centerXAnchor.constraint(equalTo: intervalInputView.centerXAnchor),
+            intervalField.centerYAnchor.constraint(equalTo: intervalInputView.centerYAnchor),
             stack.centerXAnchor.constraint(equalTo: content.centerXAnchor),
             stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 11)
         ])
+        window.invalidateCursorRects(for: intervalInputView)
+        window.invalidateCursorRects(for: intervalField)
     }
 
     private func configureDockIcon() {
@@ -277,11 +366,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func validateInterval() {
-        intervalField.stringValue = String(intervalMilliseconds())
+        intervalField.stringValue = formattedIntervalSeconds(intervalSeconds())
     }
 
-    private func intervalMilliseconds() -> Int {
-        max(50, min(3_600_000, Int(intervalField.stringValue) ?? 1000))
+    private func intervalSeconds() -> Double {
+        let normalized = intervalField.stringValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: ",", with: ".")
+        return max(0.05, min(3_600, Double(normalized) ?? 1))
+    }
+
+    private func formattedIntervalSeconds(_ seconds: Double) -> String {
+        let rounded = (seconds * 1_000).rounded() / 1_000
+        if rounded.rounded() == rounded {
+            return String(Int(rounded))
+        }
+        return String(rounded)
     }
 
     @objc private func toggleClicking() {
@@ -326,7 +426,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         applyStopButtonAppearance(title: "停止点击")
         setStatus("运行中", color: .systemGreen)
 
-        let seconds = Double(intervalMilliseconds()) / 1000.0
+        let seconds = intervalSeconds()
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: seconds, repeats: true) { [weak self] _ in
             self?.performClick()
@@ -392,10 +492,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: handler)
         localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if self.replaceIntervalOnNextInput,
+               event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
+               let characters = event.characters,
+               !characters.isEmpty,
+               characters.allSatisfy({ $0.isNumber || $0 == "." || $0 == "," }) {
+                self.replaceIntervalOnNextInput = false
+                if let editor = self.intervalField.currentEditor() as? NSTextView {
+                    editor.string = characters
+                    editor.setSelectedRange(NSRange(location: characters.utf16.count, length: 0))
+                }
+                self.intervalField.stringValue = characters
+                return nil
+            }
+
             if event.modifierFlags.contains([.option, .shift]), event.keyCode == 1 || event.keyCode == 7 {
                 handler(event)
                 return nil
             }
+            return event
+        }
+    }
+
+    private func installPanelClickMonitor() {
+        localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            guard let self, event.window === self.window, let contentView = self.window.contentView else {
+                return event
+            }
+
+            let contentPoint = contentView.convert(event.locationInWindow, from: nil)
+            guard contentView.bounds.contains(contentPoint) else {
+                return event
+            }
+
+            let inputRectInContent = self.intervalInputView.convert(
+                self.intervalInputView.bounds,
+                to: contentView
+            )
+            let clickedIntervalInput = inputRectInContent.contains(contentPoint)
+
+            if clickedIntervalInput {
+                NSCursor.iBeam.set()
+                self.replaceIntervalOnNextInput = true
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    self.window.makeFirstResponder(self.intervalField)
+                    self.intervalField.selectText(nil)
+                    if let editor = self.intervalField.currentEditor() as? NSTextView {
+                        let length = (self.intervalField.stringValue as NSString).length
+                        editor.setSelectedRange(NSRange(location: 0, length: length))
+                    }
+                }
+                return nil
+            }
+
+            self.replaceIntervalOnNextInput = false
             return event
         }
     }
